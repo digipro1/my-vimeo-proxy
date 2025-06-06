@@ -1,8 +1,0 @@
-{
-  "name": "vimeo-proxy-function",
-  "version": "1.0.0",
-  "description": "Dependencies for the Netlify function",
-  "dependencies": {
-    "node-fetch": "^2.6.7"
-  }
-}

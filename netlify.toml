@@ -1,2 +1,9 @@
+# netlify.toml
+
 [build]
-  functions = "functions/"
+  functions = "functions"
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/vimeo-proxy"
+  status = 200

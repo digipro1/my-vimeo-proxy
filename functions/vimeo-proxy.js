@@ -1,73 +1,58 @@
-const VIMEO_API_TOKEN = process.env.VIMEO_ACCESS_TOKEN;
-const API_BASE_URL = 'https://api.vimeo.com';
+// functions/vimeo-proxy.js
 
-// Define the CORS headers that give permission for cross-domain requests
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*', // Allows any domain to request data
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-};
+const fetch = require('node-fetch');
 
-exports.handler = async function(event, context) {
-  // Browsers will sometimes send an 'OPTIONS' request first to check permissions.
-  // This is called a "preflight request". We need to handle it.
+exports.handler = async (event) => {
+  // --- NEW DEBUGGING LOG ---
+  // This will show us the exact path the function receives from Netlify's routing.
+  console.log("Function invoked. Full event path:", event.path);
+
+  const headers = {
+    'Access-Control-Allow-Origin': process.env.VITE_ALLOWED_ORIGIN || '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+  };
+
   if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 204, // No Content
-      headers: CORS_HEADERS,
-      body: '',
-    };
+    return { statusCode: 204, headers };
   }
+  
+  // Get the Vimeo API path from the request URL
+  const vimeoPath = event.path.replace('/.netlify/functions/vimeo-proxy', '');
 
-  // Get the Vimeo API endpoint from the request URL.
-  const vimeoEndpoint = event.queryStringParameters.endpoint;
-
-  if (!vimeoEndpoint) {
+  if (!vimeoPath) {
     return {
       statusCode: 400,
-      headers: CORS_HEADERS, // Add headers to error responses
       body: JSON.stringify({ error: 'You must specify a Vimeo API endpoint.' }),
+      headers,
     };
   }
 
-  const vimeoURL = `${API_BASE_URL}${vimeoEndpoint}`;
+  const VIMEO_API_ENDPOINT = 'https://api.vimeo.com';
+  const url = `${VIMEO_API_ENDPOINT}${vimeoPath}?${event.rawQuery}`;
 
   try {
-    const response = await fetch(vimeoURL, {
-      method: 'GET',
+    const response = await fetch(url, {
+      method: event.httpMethod,
       headers: {
-        'Authorization': `Bearer ${VIMEO_API_TOKEN}`,
-        'Accept': 'application/vnd.vimeo.*+json;version=3.4',
+        'Authorization': `Bearer ${process.env.VITE_VIMEO_TOKEN}`,
+        'Content-Type': 'application/json',
       },
+      body: event.body,
     });
 
-    if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Vimeo API Error:', errorData);
-        // Add headers to Vimeo error responses
-        return {
-          statusCode: response.status,
-          headers: CORS_HEADERS, 
-          body: JSON.stringify(errorData),
-        };
-    }
-
     const data = await response.json();
-
-    // Add headers to the successful response
+    
     return {
-      statusCode: 200,
-      headers: CORS_HEADERS,
+      statusCode: response.status,
       body: JSON.stringify(data),
+      headers,
     };
-
   } catch (error) {
-    console.error('Error in proxy function:', error);
-    // Add headers to the function's own error responses
     return {
       statusCode: 500,
-      headers: CORS_HEADERS,
-      body: JSON.stringify({ error: 'There was an issue with the proxy function.' }),
+      body: JSON.stringify({ error: 'Failed to fetch from Vimeo API.', details: error.message }),
+      headers,
     };
   }
 };

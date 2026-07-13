@@ -1,31 +1,33 @@
 const VIMEO_API_TOKEN = process.env.VIMEO_ACCESS_TOKEN;
 const API_BASE_URL = 'https://api.vimeo.com';
 
-// Define the CORS headers that give permission for cross-domain requests
+// Define the CORS headers and strictly disable Netlify/Browser caching
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*', // Allows any domain to request data
+  'Access-Control-Allow-Origin': '*', 
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Cache-Control': 'no-cache, no-store, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0'
 };
 
 exports.handler = async function(event, context) {
-  // Browsers will sometimes send an 'OPTIONS' request first to check permissions.
-  // This is called a "preflight request". We need to handle it.
+  // Handle preflight requests
   if (event.httpMethod === 'OPTIONS') {
     return {
-      statusCode: 204, // No Content
+      statusCode: 204, 
       headers: CORS_HEADERS,
       body: '',
     };
   }
 
-  // Get the Vimeo API endpoint from the request URL.
+  // Get the Vimeo API endpoint from the request URL
   const vimeoEndpoint = event.queryStringParameters.endpoint;
 
   if (!vimeoEndpoint) {
     return {
       statusCode: 400,
-      headers: CORS_HEADERS, // Add headers to error responses
+      headers: CORS_HEADERS, 
       body: JSON.stringify({ error: 'You must specify a Vimeo API endpoint.' }),
     };
   }
@@ -38,13 +40,13 @@ exports.handler = async function(event, context) {
       headers: {
         'Authorization': `Bearer ${VIMEO_API_TOKEN}`,
         'Accept': 'application/vnd.vimeo.*+json;version=3.4',
+        'Cache-Control': 'no-cache' // Tell Vimeo's CDN to bypass its own cache
       },
     });
 
     if (!response.ok) {
         const errorData = await response.json();
         console.error('Vimeo API Error:', errorData);
-        // Add headers to Vimeo error responses
         return {
           statusCode: response.status,
           headers: CORS_HEADERS, 
@@ -54,7 +56,6 @@ exports.handler = async function(event, context) {
 
     const data = await response.json();
 
-    // Add headers to the successful response
     return {
       statusCode: 200,
       headers: CORS_HEADERS,
@@ -63,7 +64,6 @@ exports.handler = async function(event, context) {
 
   } catch (error) {
     console.error('Error in proxy function:', error);
-    // Add headers to the function's own error responses
     return {
       statusCode: 500,
       headers: CORS_HEADERS,

@@ -1,14 +1,28 @@
 const VIMEO_API_TOKEN = process.env.VIMEO_ACCESS_TOKEN;
 const API_BASE_URL = 'https://api.vimeo.com';
 
-// Define the CORS headers and strictly disable Netlify/Browser caching
+// Define the baseline CORS headers (Caching headers removed from baseline)
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*', 
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+};
+
+// Headers for when we explicitly DO NOT want to cache (Errors, bad requests)
+const NO_CACHE_HEADERS = {
+  ...CORS_HEADERS,
   'Cache-Control': 'no-cache, no-store, must-revalidate',
   'Pragma': 'no-cache',
   'Expires': '0'
+};
+
+// Headers for successful fetches to cache at the CDN edge
+const EDGE_CACHE_HEADERS = {
+  ...CORS_HEADERS,
+  // max-age=300: Browser caches for 5 minutes
+  // s-maxage=3600: Netlify Edge CDN caches for 1 hour
+  // stale-while-revalidate=86400: Serve stale cache for up to 24 hours while fetching fresh data in the background
+  'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400'
 };
 
 exports.handler = async function(event, context) {
@@ -16,7 +30,7 @@ exports.handler = async function(event, context) {
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 204, 
-      headers: CORS_HEADERS,
+      headers: NO_CACHE_HEADERS,
       body: '',
     };
   }
@@ -27,7 +41,7 @@ exports.handler = async function(event, context) {
   if (!vimeoEndpoint) {
     return {
       statusCode: 400,
-      headers: CORS_HEADERS, 
+      headers: NO_CACHE_HEADERS, 
       body: JSON.stringify({ error: 'You must specify a Vimeo API endpoint.' }),
     };
   }
@@ -39,18 +53,23 @@ exports.handler = async function(event, context) {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${VIMEO_API_TOKEN}`,
-        'Accept': 'application/vnd.vimeo.*+json;version=3.4',
-        'Cache-Control': 'no-cache' // Tell Vimeo's CDN to bypass its own cache
+        'Accept': 'application/vnd.vimeo.*+json;version=3.4'
+        // Removed 'Cache-Control': 'no-cache' to allow Vimeo's own CDN to optimize responses
       },
     });
 
     if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Vimeo API Error:', errorData);
+        const errorData = await response.text(); // Use .text() first to prevent JSON parse errors on HTML response
+        console.error(`Vimeo API Error (${response.status}):`, errorData);
+        
+        let parsedError;
+        try { parsedError = JSON.parse(errorData); } 
+        catch (e) { parsedError = { error: 'Vimeo returned a non-JSON error page.', raw: errorData }; }
+
         return {
           statusCode: response.status,
-          headers: CORS_HEADERS, 
-          body: JSON.stringify(errorData),
+          headers: NO_CACHE_HEADERS, // Never cache rate limits or server errors
+          body: JSON.stringify(parsedError),
         };
     }
 
@@ -58,7 +77,7 @@ exports.handler = async function(event, context) {
 
     return {
       statusCode: 200,
-      headers: CORS_HEADERS,
+      headers: EDGE_CACHE_HEADERS, // Apply the Edge Caching strategy to successful payloads
       body: JSON.stringify(data),
     };
 
@@ -66,8 +85,8 @@ exports.handler = async function(event, context) {
     console.error('Error in proxy function:', error);
     return {
       statusCode: 500,
-      headers: CORS_HEADERS,
-      body: JSON.stringify({ error: 'There was an issue with the proxy function.' }),
+      headers: NO_CACHE_HEADERS,
+      body: JSON.stringify({ error: 'There was an issue with the proxy function.', details: error.message }),
     };
   }
 };

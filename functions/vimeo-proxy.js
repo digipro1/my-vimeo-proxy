@@ -19,10 +19,10 @@ const NO_CACHE_HEADERS = {
 // Headers for successful fetches to cache at the CDN edge
 const EDGE_CACHE_HEADERS = {
   ...CORS_HEADERS,
-  // max-age=300: Browser caches for 5 minutes
-  // s-maxage=3600: Netlify Edge CDN caches for 1 hour
-  // stale-while-revalidate=86400: Serve stale cache for up to 24 hours while fetching fresh data in the background
-  'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400'
+  // Tell the browser to cache locally for 1 minute
+  'Cache-Control': 'public, max-age=60',
+  // Tell Netlify's CDN to cache globally for 5 minutes, serve stale up to 10 minutes, and use durable storage
+  'Netlify-CDN-Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600, durable'
 };
 
 exports.handler = async function(event, context) {
